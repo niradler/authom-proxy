@@ -23,20 +23,20 @@ Authom Proxy is an open-source authentication proxy service that simplifies the 
 
 1. Clone the repository:
 
-   ```
+   ```sh
    git clone https://github.com/yourusername/authom-proxy.git
    cd authom-proxy
    ```
 
 2. Install dependencies:
 
-   ```
+   ```sh
    npm install
    ```
 
 3. Create a `.env` file in the root directory and add your configuration:
 
-   ```
+   ```sh
    PORT=3000
    JWT_SECRET=your_jwt_secret
    ALLOWED_USERS=user1@example.com,user2@example.com
@@ -47,13 +47,13 @@ Authom Proxy is an open-source authentication proxy service that simplifies the 
 
 4. Build the project:
 
-   ```
+   ```sh
    npm run build
    ```
 
 5. Start the server:
 
-   ```
+   ```sh
    npm start
    ```
 
@@ -65,7 +65,7 @@ To deploy using Docker and docker-compose:
 2. Create a `.env` file as described in the Installation section.
 3. Run:
 
-   ```
+   ```sh
    docker-compose up -d
    ```
 
@@ -155,4 +155,3 @@ This project is licensed under the ISC License - see the [LICENSE](LICENSE) file
 ## Support
 
 If you encounter any issues or have questions, please file an issue on the GitHub repository.
-````
