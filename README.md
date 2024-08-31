@@ -107,7 +107,7 @@ GOOGLE_CLIENT_SECRET=your_google_client_secret
 
 2. Alternatively, add the provider configuration to `authom-proxy.json`:
 
-````json
+```json
 {
   "providers": {
     "google": {
