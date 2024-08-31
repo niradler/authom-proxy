@@ -85,7 +85,7 @@ Authom Proxy supports the following OAuth providers out of the box:
 4. Twitter
 5. LinkedIn
 6. Microsoft
-7. ~~Apple~~
+7. Apple
 8. Amazon
 9. Yahoo
 10. Discord
@@ -120,8 +120,9 @@ GOOGLE_CLIENT_SECRET=your_google_client_secret
     }
   }
 }
+```
 
-adding custom provider:
+Adding custom provider:
 ```json
 {
   "providers": {
