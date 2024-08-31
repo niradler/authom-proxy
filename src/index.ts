@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import ms from 'ms';
 import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser'
+import morgan from 'morgan';
 import helmet from 'helmet';
 import { config } from './config';
 import packageJson from '../package.json';
@@ -22,7 +23,7 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, '..', 'views'));
 // Serve static files from the 'assets' directory
 app.use('/assets', express.static(path.join(__dirname, '..', 'assets')));
-
+app.use(morgan(':method :url :status :response-time ms'));
 type JwtPayload = {
     email: string;
     createdAt: string;
@@ -68,10 +69,14 @@ const isAuthenticated = (token?: string): JwtPayload | false => {
     }
 };
 
-const shouldLogin = (req: AuthenticatedRequest, res: Response, redirect: string) => {
-    if (req.path === redirect) {
+const shouldLogin = (req: AuthenticatedRequest, res: Response) => {
+    const originalUrl = req.headers['x-forwarded-uri'] || req.originalUrl;
+    const redirect = `/auth/login?redirect=${encodeURIComponent(originalUrl as string)}`;
+
+    if (req.path === '/auth/login') {
         return;
     }
+    res.clearCookie(cookieName);
 
     return res.redirect(redirect)
 }
@@ -80,15 +85,14 @@ const shouldLogin = (req: AuthenticatedRequest, res: Response, redirect: string)
 const isAuthenticatedMiddleware = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const token = req.signedCookies?.[cookieName];
     if (!token) {
-        return shouldLogin(req, res, '/auth/login');
+        return shouldLogin(req, res);
     }
     const user = isAuthenticated(token);
     if (user) {
         req.user = user;
         next();
     } else {
-        res.clearCookie(cookieName);
-        shouldLogin(req, res, '/auth/login');
+        shouldLogin(req, res);
     }
 };
 
@@ -171,16 +175,15 @@ authRouter.get('/profile', isAuthenticatedMiddleware, (req: Request, res: Respon
 
 authRouter.get('/login', (req: Request, res: Response) => {
     const token = req.signedCookies?.[cookieName];
+    const redirect = req.query.redirect || '/auth/profile';
     if (token) {
-        // User is logged in
         res.redirect('/auth/profile');
     } else {
-        // User is not logged in
         const providerList = Object.keys(providers)
             .filter(provider => providers[provider].enabled)
             .map(provider => ({
                 name: provider,
-                url: `/auth/${provider}/url?follow=true`
+                url: `/auth/${provider}/url?follow=true&redirect=${redirect}`
             }));
 
         res.render('login', { providers: providerList });
@@ -193,15 +196,14 @@ authRouter.get('/session', isAuthenticatedMiddleware, (req: AuthenticatedRequest
 });
 
 authRouter.get('/logout', (req: Request, res: Response) => {
-    res.clearCookie(cookieName);
-    shouldLogin(req, res, '/auth/login');
+    shouldLogin(req, res);
 });
 
 app.use('/auth', authRouter);
 
 // Redirect all other routes to / auth / login
 app.use('*', (req: Request, res: Response) => {
-    shouldLogin(req, res, '/auth/login');
+    shouldLogin(req, res);
 });
 
 app.listen(port, () => {
