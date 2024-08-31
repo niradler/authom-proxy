@@ -58,5 +58,11 @@ export default {
         "tokenUrl": "https://discord.com/api/oauth2/token",
         "profileUrl": "https://discord.com/api/users/@me",
         "scope": "identify email"
-    }
+    },
+    "custom": {
+        "authUrl": "https://customdomain.com/authorize",
+        "tokenUrl": "https://customdomain.com/oauth2/token",
+        "profileUrl": "https://customdomain.com/api/auth/userinfo",
+        "scope": "email"
+    },
 }

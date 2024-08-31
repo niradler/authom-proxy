@@ -5,11 +5,11 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
     "outDir": "./build",
     "resolveJsonModule": true,
+    "moduleResolution": "node",
     "rootDir": "./src"
   },
-  "include": ["src/**/*.ts", "src/**/*.json"],
+  "include": ["src/**/*", "assets"],
   "exclude": ["node_modules"]
 }

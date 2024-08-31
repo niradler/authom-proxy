@@ -1,10 +1,11 @@
 version: "3"
 
 services:
-  auth-proxy:
+  authom-proxy:
+    container_name: authom-proxy
     build: .
     ports:
-      - "3000:3000"
+      - "8001:3000"
     env_file:
       - .env
     networks:
@@ -15,19 +16,30 @@ services:
       - "traefik.http.services.auth-proxy.loadbalancer.server.port=3000"
 
   traefik:
-    image: traefik:v2.5
+    image: traefik
     command:
       - "--api.insecure=true"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
+      - "--log.level=INFO"
+      - "--accesslog"
+      - "--accesslog.fields.headers.defaultmode=keep"
+      - "--accesslog.fields.headers.names.host=keep"
     ports:
+      - "3000:80"
       - "80:80"
       - "8080:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - traefik-public
+    labels:
+      - "traefik.http.middlewares.auth-middleware.forwardauth.trustForwardHeader=true"
+      - "traefik.http.middlewares.auth-middleware.forwardauth.authResponseHeaders=X-Forwarded-User"
+      - "traefik.http.middlewares.auth-middleware.forwardauth.authResponseHeadersRegex=X-.*"
+      - "traefik.http.middlewares.auth-middleware.forwardauth.address=http://authom-proxy:3000/auth/login"
+      - "traefik.http.routers.auth.middlewares=auth-middleware"
 
   whoami:
     image: traefik/whoami
@@ -35,19 +47,9 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.whoami.rule=Host(`localhost`) && PathPrefix(`/whoami`)"
       - "traefik.http.routers.whoami.middlewares=auth-middleware"
-      - "traefik.http.middlewares.auth-middleware.forwardauth.address=http://localhost/auth/session"
-      - "traefik.http.middlewares.auth-middleware.forwardauth.authResponseHeaders=X-Forwarded-User"
+
     networks:
       - traefik-public
 
 networks:
   traefik-public:
-# To test locally:
-# 1. Start the services with 'docker-compose up'
-# 2. Visit http://localhost/whoami in your browser
-# 3. You should be redirected to http://localhost/auth/providers for authentication
-# 4. After successful authentication, you should see the whoami service response
-# 5. To test the auth proxy directly, visit http://localhost/auth/providers
-#
-# Note: Make sure your .env file is properly configured with the necessary OAuth credentials
-# and that the ALLOWED_USERS in the .env file includes your email for authorization

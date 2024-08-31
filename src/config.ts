@@ -20,6 +20,7 @@ type Config = {
     providers: Record<string, Provider>;
     allowedUsers: string[];
     jwtSecret: string;
+    cookieSecret: string
 };
 
 class ConfigManager {
@@ -31,7 +32,6 @@ class ConfigManager {
 
     private loadConfig(): Config {
         let configFile: Config | null = null;
-        let providersFile: Record<string, Omit<Provider, 'enabled' | 'clientId' | 'clientSecret'>> | null = null;
 
         // Try to load config from file
         try {
@@ -53,6 +53,7 @@ class ConfigManager {
                 required: true
             }),
             jwtSecret: this.getConfigValue({ key: 'JWT_SECRET', fileValue: configFile?.jwtSecret, defaultValue: '', required: true }),
+            cookieSecret: this.getConfigValue({ key: 'COOKIE_SECRET', fileValue: configFile?.cookieSecret, defaultValue: '', required: true })
         };
 
         // Fill in provider details
@@ -60,12 +61,12 @@ class ConfigManager {
             const upperProviderName = providerName.toUpperCase();
             config.providers[providerName] = {
                 enabled: this.getConfigValue({ key: `${upperProviderName}_CLIENT_ID`, fileValue: configFile?.providers?.[providerName]?.enabled, defaultValue: false }) ? true : false,
-                authUrl: providerDetails.authUrl,
-                tokenUrl: providerDetails.tokenUrl,
-                profileUrl: providerDetails.profileUrl,
                 clientId: this.getConfigValue({ key: `${upperProviderName}_CLIENT_ID`, fileValue: configFile?.providers?.[providerName]?.clientId, defaultValue: '' }),
                 clientSecret: this.getConfigValue({ key: `${upperProviderName}_CLIENT_SECRET`, fileValue: configFile?.providers?.[providerName]?.clientSecret, defaultValue: '' }),
-                scope: providerDetails.scope,
+                authUrl: this.getConfigValue({ key: `${upperProviderName}_AUTH_URL`, fileValue: configFile?.providers?.[providerName]?.authUrl, defaultValue: providerDetails.authUrl }),
+                tokenUrl: this.getConfigValue({ key: `${upperProviderName}_TOKEN_URL`, fileValue: configFile?.providers?.[providerName]?.tokenUrl, defaultValue: providerDetails.tokenUrl }),
+                profileUrl: this.getConfigValue({ key: `${upperProviderName}_PROFILE_URL`, fileValue: configFile?.providers?.[providerName]?.profileUrl, defaultValue: providerDetails.profileUrl }),
+                scope: this.getConfigValue({ key: `${upperProviderName}_SCOPE`, fileValue: configFile?.providers?.[providerName]?.scope, defaultValue: providerDetails.scope }),
             };
         }
 

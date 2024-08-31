@@ -11,6 +11,8 @@ RUN npm run build
 FROM node:lts-alpine
 WORKDIR /usr/src/app
 COPY package*.json ./
+COPY views ./views
+COPY assets ./assets
 RUN npm ci --only=production
 COPY --from=build /usr/src/app/build ./build
 EXPOSE 3000

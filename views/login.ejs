@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secured by Authom</title>
+    <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="/assets/ui.js"></script>
+</head>
+
+<body
+    class="bg-black/50 overflow-y-auto overflow-x-hidden fixed top-0 right-0 left-0 z-50 h-full items-center justify-center flex font-sans">
+    <div class="relative p-4 w-full max-w-md h-full md:h-auto">
+        <div class="relative bg-white rounded-lg shadow">
+            <div class="p-5">
+                <div class="text-center">
+                    <p class="mb-3 text-2xl font-semibold leading-5 text-slate-900">
+                        Authom
+                    </p>
+                    <p class="mt-2 text-sm leading-4 text-slate-600">
+                        You must be logged in to perform this action.
+                    </p>
+                </div>
+
+                <div class="mt-7 flex flex-col gap-2">
+                    <% providers.forEach(function(provider) { %>
+                        <a href="<%=provider.url%>"
+                            class="inline-flex h-10 w-full items-center justify-center gap-2 rounded border border-slate-300 bg-white p-2 text-sm font-medium text-black outline-none focus:ring-2 focus:ring-[#333] focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60">
+                            <span id="icon-<%= provider.name.toLowerCase() %>"></span>
+                            <%=provider.name.charAt(0).toUpperCase() + provider.name.slice(1)%>
+                        </a>
+                        <% }); %>
+                </div>
+
+                <!-- <div class="mt-6 text-center text-sm text-slate-600">
+                    By continuing, you agree to our <a href="#" class="font-medium text-[#4285f4]">Terms of Service</a>
+                    and
+                    <a href="#" class="font-medium text-[#4285f4]">Privacy Policy</a>.
+                </div> -->
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>
