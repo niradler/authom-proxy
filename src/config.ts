@@ -15,12 +15,16 @@ type Provider = {
 };
 
 type Config = {
+    customHost?: string;
     expiresIn: string;
     port: number;
     providers: Record<string, Provider>;
     allowedUsers: string[];
     jwtSecret: string;
     cookieSecret: string
+    cookieName: string;
+    rateLimitWindow: number;
+    rateLimitMax: number;
 };
 
 class ConfigManager {
@@ -43,6 +47,7 @@ class ConfigManager {
 
         const config: Config = {
             expiresIn: this.getConfigValue({ key: 'COOKIE_EXPIRES_IN', fileValue: configFile?.expiresIn, defaultValue: '6h' }),
+            customHost: this.getConfigValue({ key: 'CUSTOM_HOST', fileValue: configFile?.customHost, defaultValue: undefined }),
             port: this.getConfigValue({ key: 'PORT', fileValue: configFile?.port, defaultValue: 3000 }),
             providers: {},
             allowedUsers: this.getConfigValue({
@@ -53,7 +58,10 @@ class ConfigManager {
                 required: true
             }),
             jwtSecret: this.getConfigValue({ key: 'JWT_SECRET', fileValue: configFile?.jwtSecret, defaultValue: '', required: true }),
-            cookieSecret: this.getConfigValue({ key: 'COOKIE_SECRET', fileValue: configFile?.cookieSecret, defaultValue: '', required: true })
+            cookieSecret: this.getConfigValue({ key: 'COOKIE_SECRET', fileValue: configFile?.cookieSecret, defaultValue: '', required: true }),
+            cookieName: this.getConfigValue({ key: 'COOKIE_NAME', fileValue: configFile?.cookieName, defaultValue: 'authom-authorization' }),
+            rateLimitWindow:this.getConfigValue({ key: 'RATE_LIMIT_WINDOW', fileValue: configFile?.rateLimitWindow, defaultValue: 5 * 60 * 1000 }),
+            rateLimitMax: this.getConfigValue({ key: 'RATE_LIMIT_MAX', fileValue: configFile?.rateLimitMax, defaultValue: 300 })
         };
 
         // Fill in provider details

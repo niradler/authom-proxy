@@ -79,7 +79,7 @@ To deploy using Docker and docker-compose:
 
 Authom Proxy supports the following OAuth providers out of the box:
 
-1. Google
+1. Google (tested)
 2. GitHub
 3. Facebook
 4. Twitter
