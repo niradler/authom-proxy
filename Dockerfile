@@ -1,21 +1,19 @@
-# Build stage
-FROM node:lts-alpine AS build
+FROM node:24-alpine AS build
 WORKDIR /usr/src/app
-COPY package*.json ./
-RUN npm ci
-COPY tsconfig.json .
+COPY package.json package-lock.json tsconfig.json ./
 COPY src ./src
-RUN npm run build
+RUN npm ci && npm run build && npm prune --omit=dev
 
-# Production stage
-FROM node:lts-alpine
+FROM node:24-alpine
 WORKDIR /usr/src/app
-COPY package*.json ./
+ENV NODE_ENV=production
+ENV BIND_HOST=0.0.0.0
+COPY --from=build /usr/src/app/package.json /usr/src/app/package-lock.json ./
+COPY --from=build /usr/src/app/node_modules ./node_modules
+COPY --from=build /usr/src/app/build ./build
 COPY views ./views
 COPY assets ./assets
-RUN npm ci --only=production
-COPY --from=build /usr/src/app/build ./build
-EXPOSE 3000
-RUN chown -R node /usr/src/app
 USER node
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s CMD node -e "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "build/index.js"]

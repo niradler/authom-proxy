@@ -15,8 +15,8 @@ Authom Proxy is an open-source authentication proxy service that simplifies the 
 
 ### Prerequisites
 
-- Node.js (v14 or later)
-- npm or yarn
+- Node.js 22 or later
+- npm
 - Docker and docker-compose (optional, for containerized deployment)
 
 ### Installation
@@ -34,26 +34,12 @@ Authom Proxy is an open-source authentication proxy service that simplifies the 
    npm install
    ```
 
-3. Create a `.env` file in the root directory and add your configuration:
+3. Create a `.env` file from `.env.example`. `PUBLIC_URL`, `JWT_SECRET`, `COOKIE_SECRET`, `ALLOWED_USERS`, and one OAuth provider are required. Secrets must be at least 32 characters. The process listens on `127.0.0.1` unless `BIND_HOST` is set.
 
-   ```sh
-   PORT=3000
-   JWT_SECRET=your_jwt_secret
-   ALLOWED_USERS=user1@example.com,user2@example.com
-   GOOGLE_CLIENT_ID=your_google_client_id
-   GOOGLE_CLIENT_SECRET=your_google_client_secret
-   # Add other provider credentials as needed
-   ```
-
-4. Build the project:
+4. Build and start:
 
    ```sh
    npm run build
-   ```
-
-5. Start the server:
-
-   ```sh
    npm start
    ```
 
@@ -61,19 +47,15 @@ Authom Proxy is an open-source authentication proxy service that simplifies the 
 
 To deploy using Docker and docker-compose:
 
-1. Ensure you have Docker and docker-compose installed.
-2. Create a `.env` file as described in the Installation section.
-3. Run:
-
-   ```sh
-   docker-compose up -d
-   ```
+1. Create a `.env` file as described in the Installation section.
+2. Run `docker compose up -d --build`. The published port is bound to `127.0.0.1:8001`. Inside the container the process listens on `0.0.0.0` so a private Docker network can reach it.
+3. Point Traefik forward auth at `http://authom-proxy:3000/auth/session`. A successful check returns `X-Forwarded-User`. Set `TRUST_PROXY=1` when a single trusted proxy sits in front of the app.
 
 ## Usage
 
 1. Configure your application to use Authom Proxy as an authentication middleware.
 2. Direct users to `http://your-domain.com/auth/providers` to see available login options.
-3. After successful authentication, users will be redirected to your application with an `X-Forwarded-User` header containing their email.
+3. After a successful login the browser receives an `HttpOnly` session cookie. Forward-auth checks should call `/auth/session`, which returns `X-Forwarded-User` only for allowlisted addresses. Redirect targets are limited to same-site paths.
 
 ## Supported Providers
 
@@ -115,8 +97,8 @@ GOOGLE_CLIENT_SECRET=your_google_client_secret
       "clientSecret": "your_google_client_secret",
       "authUrl": "https://accounts.google.com/o/oauth2/v2/auth", //optional
       "tokenUrl": "https://oauth2.googleapis.com/token", //optional
-      "profileUrl": "https://www.googleapis.com/oauth2/v1/userinfo", //optional
-      "scope": "https://www.googleapis.com/auth/userinfo.email" //optional
+      "profileUrl": "https://www.googleapis.com/oauth2/v3/userinfo",
+      "scope": "openid email"
     }
   }
 }

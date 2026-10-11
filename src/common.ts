@@ -1,61 +1,98 @@
-import { config } from './config';
-import { Request, Response, NextFunction } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
-
-const { jwtSecret, cookieName } = config;
+import type { Config } from './config';
+import { clearCookieOptions, emailAllowed, safeRedirect, sessionCookieOptions } from './security';
 
 export type JwtPayload = {
     email: string;
     createdAt: string;
 };
 
-export interface AuthenticatedRequest extends Request {
-    user?: jwt.JwtPayload;
+export type AuthenticatedRequest = Request & {
+    user?: JwtPayload;
+};
+
+const jwtOptions: jwt.VerifyOptions = {
+    algorithms: ['HS256'],
+    issuer: 'authom-proxy',
+    audience: 'authom-proxy',
+};
+
+export function loginURL(config: Config, redirect: unknown): string {
+    const next = safeRedirect(redirect);
+    return `${config.publicURL}/auth/login?redirect=${encodeURIComponent(next)}`;
 }
 
-export const getHost = (req: AuthenticatedRequest) => {
-    const { 'x-forwarded-proto': proto, 'x-forwarded-host': host } = req.headers;
-    const forwardedHost = proto && host ? `${proto}://${host}` : req.get('host');
-
-    return config.customHost || forwardedHost;
-}
-
-export const isAuthenticated = (req: AuthenticatedRequest): JwtPayload | false => {
-    const token = req.signedCookies?.[cookieName] || req.headers['authorization'];
+export function readSession(config: Config, req: Request): JwtPayload | undefined {
+    const token = readToken(config, req);
     if (!token) {
-        return false;
+        return undefined;
     }
     try {
-        const decoded = jwt.verify(token, jwtSecret) as jwt.JwtPayload;
-        return decoded as JwtPayload;
-    } catch (error) {
-        return false;
+        const decoded: unknown = jwt.verify(token, config.jwtSecret, jwtOptions);
+        if (!decoded || typeof decoded !== 'object') {
+            return undefined;
+        }
+        const claims = decoded as Record<string, unknown>;
+        if (typeof claims.email !== 'string') {
+            return undefined;
+        }
+        const email = claims.email.trim().toLowerCase();
+        if (!emailAllowed(email, config.allowedUsers)) {
+            return undefined;
+        }
+        const createdAt = typeof claims.createdAt === 'string' ? claims.createdAt : '';
+        return { email, createdAt };
+    } catch {
+        return undefined;
     }
-};
-
-export const shouldLogin = (req: AuthenticatedRequest, res: Response) => {
-    const apiRequest = req.headers['accept'] === 'application/json' || req.query.api === 'true';
-    const originalUrl = req.headers['x-forwarded-uri'] || req.originalUrl || req.query.redirect;
-    const redirect = getHost(req) + `/auth/login?redirect=${encodeURIComponent(originalUrl as string)}`;
-
-    if (req.path === '/auth/login') {
-        return;
-    }
-    res.clearCookie(cookieName);
-
-    if (apiRequest) {
-        return res.status(401).send({ error: 'Unauthorized', redirect });
-    }
-
-    return res.redirect(redirect)
 }
 
-export const isAuthenticatedMiddleware = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const user = isAuthenticated(req);
-    if (user) {
+export function issueToken(config: Config, email: string): string {
+    return jwt.sign(
+        { email, createdAt: new Date().toISOString() },
+        config.jwtSecret,
+        {
+            algorithm: 'HS256',
+            expiresIn: config.expiresInSeconds,
+            issuer: 'authom-proxy',
+            audience: 'authom-proxy',
+        },
+    );
+}
+
+export function shouldLogin(config: Config, req: Request, res: Response): void {
+    const wantsJSON = req.headers.accept === 'application/json' || req.query.api === 'true';
+    const redirect = loginURL(config, req.headers['x-forwarded-uri'] || req.query.redirect || '/');
+    res.clearCookie(config.cookieName, clearCookieOptions(sessionCookieOptions(config)));
+    if (wantsJSON) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+    }
+    res.redirect(redirect);
+}
+
+export function isAuthenticatedMiddleware(config: Config) {
+    return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+        const user = readSession(config, req);
+        if (!user) {
+            shouldLogin(config, req, res);
+            return;
+        }
         req.user = user;
         next();
-    } else {
-        shouldLogin(req, res);
+    };
+}
+
+function readToken(config: Config, req: Request): string | undefined {
+    const cookie = req.signedCookies?.[config.cookieName];
+    if (typeof cookie === 'string' && cookie.length > 0) {
+        return cookie;
     }
-};
+    const header = req.headers.authorization;
+    if (typeof header === 'string' && header.startsWith('Bearer ')) {
+        const token = header.slice('Bearer '.length).trim();
+        return token.length > 0 ? token : undefined;
+    }
+    return undefined;
+}
