@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../src/config';
-import { createState, safeRedirect, verifyState } from '../src/security';
+import { createState, safeRedirect, safeReturnURL, verifyState } from '../src/security';
 
 const secret = 's'.repeat(40);
 
@@ -13,6 +13,11 @@ describe('safeRedirect', () => {
         expect(safeRedirect('https://evil.example/phish')).toBe('/');
         expect(safeRedirect('//evil.example')).toBe('/');
         expect(safeRedirect('/\\evil.example')).toBe('/');
+    });
+
+    it('should allow an absolute return only for a configured origin', () => {
+        expect(safeReturnURL('https://app.lab.example/dash?x=1', ['https://app.lab.example'])).toBe('https://app.lab.example/dash?x=1');
+        expect(safeReturnURL('https://evil.example/phish', ['https://app.lab.example'])).toBe('/');
     });
 });
 
@@ -67,5 +72,17 @@ describe('loadConfig', () => {
 
     it('should reject sessions longer than 24 hours', () => {
         expect(() => loadConfig({ ...baseEnv, COOKIE_EXPIRES_IN: '30d' })).toThrow(/COOKIE_EXPIRES_IN/);
+    });
+
+    it('should share a cookie only with a parent of the public host', () => {
+        const config = loadConfig({
+            ...baseEnv,
+            PUBLIC_URL: 'https://auth.lab.example',
+            COOKIE_DOMAIN: '.lab.example',
+            ALLOWED_REDIRECT_ORIGINS: 'https://app.lab.example',
+        });
+        expect(config.cookieDomain).toBe('lab.example');
+        expect(config.allowedRedirectOrigins).toEqual(['https://app.lab.example']);
+        expect(() => loadConfig({ ...baseEnv, COOKIE_DOMAIN: 'evil.example' })).toThrow(/COOKIE_DOMAIN/);
     });
 });

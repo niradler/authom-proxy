@@ -30,6 +30,28 @@ export function safeRedirect(value: unknown): string {
     return `${parsed.pathname}${parsed.search}`;
 }
 
+export function safeReturnURL(value: unknown, allowedOrigins: readonly string[]): string {
+    if (typeof value === 'string' && value.startsWith('/') && !value.startsWith('//')) {
+        return safeRedirect(value);
+    }
+    if (typeof value !== 'string' || value.length === 0 || value.length > 2048) {
+        return '/';
+    }
+    let parsed: URL;
+    try {
+        parsed = new URL(value);
+    } catch {
+        return '/';
+    }
+    if ((parsed.protocol !== 'https:' && parsed.protocol !== 'http:') || parsed.username || parsed.password) {
+        return '/';
+    }
+    if (!allowedOrigins.includes(parsed.origin)) {
+        return '/';
+    }
+    return `${parsed.origin}${parsed.pathname}${parsed.search}`;
+}
+
 export function emailAllowed(email: string, allowed: string[]): boolean {
     return allowed.includes(email.trim().toLowerCase());
 }
@@ -48,16 +70,16 @@ export function signState(payload: StatePayload, secret: string): string {
     return `${body}.${signature}`;
 }
 
-export function createState(provider: string, redirect: unknown, secret: string): string {
+export function createState(provider: string, redirect: unknown, secret: string, allowedOrigins: readonly string[] = []): string {
     return signState({
-        redirect: safeRedirect(redirect),
+        redirect: safeReturnURL(redirect, allowedOrigins),
         exp: Date.now() + stateLifetimeMs,
         provider,
         nonce: randomBytes(16).toString('base64url'),
     }, secret);
 }
 
-export function verifyState(token: string, secret: string, provider: string): StatePayload {
+export function verifyState(token: string, secret: string, provider: string, allowedOrigins: readonly string[] = []): StatePayload {
     const parts = token.split('.');
     if (parts.length !== 2 || !parts[0] || !parts[1]) {
         throw new Error('invalid state');
@@ -75,7 +97,7 @@ export function verifyState(token: string, secret: string, provider: string): St
     }
     return {
         ...parsed,
-        redirect: safeRedirect(parsed.redirect),
+        redirect: safeReturnURL(parsed.redirect, allowedOrigins),
     };
 }
 
@@ -104,6 +126,7 @@ export function sessionCookieOptions(config: Config): CookieOptions {
         path: '/',
         maxAge: config.maxAgeMs,
         signed: true,
+        ...(config.cookieDomain ? { domain: config.cookieDomain } : {}),
     };
 }
 

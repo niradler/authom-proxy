@@ -11,6 +11,8 @@ server.headersTimeout = 10_000;
 server.keepAliveTimeout = 65_000;
 
 function shutdown(): void {
+    const timer = setTimeout(() => process.exit(1), 10_000);
+    timer.unref();
     server.close(() => process.exit(0));
 }
 

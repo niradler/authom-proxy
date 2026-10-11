@@ -1,3 +1,5 @@
+import { normalizeEmail } from './config';
+
 export async function exchangeCode(input: {
     tokenUrl: string;
     clientId: string;
@@ -80,8 +82,8 @@ function findEmail(value: unknown, depth = 0): string | undefined {
     const record = value as Record<string, unknown>;
     for (const key of ['email', 'mail', 'userPrincipalName', 'confirmed_email']) {
         const item = record[key];
-        if (typeof item === 'string' && item.includes('@')) {
-            return item.trim().toLowerCase();
+        if (typeof item === 'string') {
+            return normalizeEmail(item);
         }
     }
     if (record.data) {
@@ -104,7 +106,7 @@ function githubPrimaryEmail(value: unknown): string | undefined {
     if (!primary || typeof primary.email !== 'string') {
         return undefined;
     }
-    return primary.email.trim().toLowerCase();
+    return normalizeEmail(primary.email);
 }
 
 function readStringField(value: unknown, key: string): string | undefined {

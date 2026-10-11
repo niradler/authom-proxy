@@ -4,7 +4,7 @@ import type { Request, Response } from 'express';
 import type { Config } from '../config';
 import { issueToken, isAuthenticatedMiddleware, readSession, shouldLogin, type AuthenticatedRequest } from '../common';
 import { exchangeCode, fetchEmail } from '../oauth';
-import { clearCookieOptions, codeChallenge, createCodeVerifier, createState, emailAllowed, pkceCookieOptions, safeRedirect, sessionCookieOptions, verifyState } from '../security';
+import { clearCookieOptions, codeChallenge, createCodeVerifier, createState, emailAllowed, pkceCookieOptions, safeReturnURL, sessionCookieOptions, verifyState } from '../security';
 
 export function createAuthRouter(config: Config): Router {
     const authRouter = Router();
@@ -25,8 +25,7 @@ export function createAuthRouter(config: Config): Router {
             res.status(400).send('Unsupported provider');
             return;
         }
-        const redirect = safeRedirect(req.query.redirect);
-        const state = createState(provider.name, redirect, config.jwtSecret);
+        const state = createState(provider.name, req.query.redirect, config.jwtSecret, config.allowedRedirectOrigins);
         const verifier = createCodeVerifier();
         res.cookie(config.pkceCookieName, verifier, pkceCookieOptions(config));
         const redirectUri = callbackURL(config, provider.name);
@@ -58,7 +57,7 @@ export function createAuthRouter(config: Config): Router {
         }
         res.clearCookie(config.pkceCookieName, clearCookieOptions(pkceCookieOptions(config)));
         try {
-            const verified = verifyState(state, config.jwtSecret, provider.name);
+            const verified = verifyState(state, config.jwtSecret, provider.name, config.allowedRedirectOrigins);
             const accessToken = await exchangeCode({
                 tokenUrl: provider.tokenUrl,
                 clientId: provider.clientId,
@@ -98,7 +97,7 @@ export function createAuthRouter(config: Config): Router {
     });
 
     authRouter.get('/login', (req: Request, res: Response) => {
-        const redirect = safeRedirect(req.query.redirect);
+        const redirect = safeReturnURL(req.query.redirect, config.allowedRedirectOrigins);
         const user = readSession(config, req);
         if (user) {
             res.redirect(redirect);
@@ -113,12 +112,35 @@ export function createAuthRouter(config: Config): Router {
         res.render('login', { providers: providerList });
     });
 
+    authRouter.post('/logout', (req: Request, res: Response) => {
+        endSession(config, req, res);
+    });
+
     authRouter.get('/logout', (req: Request, res: Response) => {
-        res.clearCookie(config.cookieName, clearCookieOptions(sessionCookieOptions(config)));
-        res.redirect(`${config.publicURL}/auth/login`);
+        endSession(config, req, res);
     });
 
     return authRouter;
+}
+
+function endSession(config: Config, req: Request, res: Response): void {
+    if (!logoutAllowed(config, req)) {
+        res.status(403).send('Forbidden');
+        return;
+    }
+    res.clearCookie(config.cookieName, clearCookieOptions(sessionCookieOptions(config)));
+    res.redirect(`${config.publicURL}/auth/login`);
+}
+
+function logoutAllowed(config: Config, req: Request): boolean {
+    const siteHeader = req.headers['sec-fetch-site'];
+    const site = (Array.isArray(siteHeader) ? siteHeader[0] : siteHeader || '').toLowerCase();
+    if (site === 'cross-site' || site === 'same-site') {
+        return false;
+    }
+    const originHeader = req.headers.origin;
+    const origin = Array.isArray(originHeader) ? originHeader[0] : originHeader;
+    return !origin || origin === config.publicURL;
 }
 
 function callbackURL(config: Config, provider: string): string {

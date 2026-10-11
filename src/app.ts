@@ -29,11 +29,19 @@ export function createApp(config: Config): express.Express {
         crossOriginEmbedderPolicy: false,
     }));
     app.use(cookieParser(config.cookieSecret));
+    app.use((_req, res, next) => {
+        res.setHeader('Cache-Control', 'no-store');
+        next();
+    });
     app.use(rateLimit({
         windowMs: config.rateLimitWindowMs,
         max: config.rateLimitMax,
         standardHeaders: true,
         legacyHeaders: false,
+        skip: (req) => {
+            const path = req.originalUrl.split('?')[0] || '';
+            return path === '/health' || path === '/auth/health';
+        },
     }));
     app.use('/assets', express.static(path.join(__dirname, '..', 'assets'), { index: false, dotfiles: 'deny' }));
     app.get('/health', (_req: Request, res: Response) => {

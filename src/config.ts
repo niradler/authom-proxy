@@ -23,7 +23,9 @@ export type Config = {
     jwtSecret: string;
     cookieSecret: string;
     cookieName: string;
+    cookieDomain: string;
     pkceCookieName: string;
+    allowedRedirectOrigins: string[];
     rateLimitWindowMs: number;
     rateLimitMax: number;
     authRateLimitMax: number;
@@ -39,6 +41,8 @@ type FileConfig = {
     jwtSecret?: unknown;
     cookieSecret?: unknown;
     cookieName?: unknown;
+    cookieDomain?: unknown;
+    allowedRedirectOrigins?: unknown;
     rateLimitWindow?: unknown;
     rateLimitMax?: unknown;
     bindHost?: unknown;
@@ -52,7 +56,7 @@ const durationUnits: Record<string, number> = {
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-    dotenv.config();
+    dotenv.config({ quiet: true });
     const fileConfig = readFileConfig();
     const expiresIn = readString(env.COOKIE_EXPIRES_IN || env.EXPIRES_IN, fileConfig?.expiresIn, '8h');
     const maxAgeMs = parseDuration(expiresIn);
@@ -73,10 +77,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
         jwtSecret,
         cookieSecret,
         cookieName: readString(env.COOKIE_NAME, fileConfig?.cookieName, 'authom-authorization'),
+        cookieDomain: parseCookieDomain(readString(env.COOKIE_DOMAIN, fileConfig?.cookieDomain, ''), publicURL),
         pkceCookieName: 'authom-pkce',
-        rateLimitWindowMs: readNumber(env.RATE_LIMIT_WINDOW, fileConfig?.rateLimitWindow, 5 * 60 * 1000),
-        rateLimitMax: readNumber(env.RATE_LIMIT_MAX, fileConfig?.rateLimitMax, 300),
-        authRateLimitMax: readNumber(env.AUTH_RATE_LIMIT_MAX, undefined, 30),
+        allowedRedirectOrigins: readOrigins(env.ALLOWED_REDIRECT_ORIGINS, fileConfig?.allowedRedirectOrigins),
+        rateLimitWindowMs: requireBounded('RATE_LIMIT_WINDOW', readNumber(env.RATE_LIMIT_WINDOW, fileConfig?.rateLimitWindow, 5 * 60 * 1000), 1000, 24 * 60 * 60 * 1000),
+        rateLimitMax: requireBounded('RATE_LIMIT_MAX', readNumber(env.RATE_LIMIT_MAX, fileConfig?.rateLimitMax, 300), 1, 100_000),
+        authRateLimitMax: requireBounded('AUTH_RATE_LIMIT_MAX', readNumber(env.AUTH_RATE_LIMIT_MAX, undefined, 30), 1, 10_000),
         trustProxy: readTrustProxy(env.TRUST_PROXY),
     };
 
@@ -165,11 +171,27 @@ function readUsers(envValue: string | undefined, fileValue: unknown): string[] {
     } else if (typeof fileValue === 'string') {
         source = fileValue.split(',');
     }
-    const users = source.map((user) => user.trim().toLowerCase()).filter(Boolean);
+    const users = source.map((user) => user.trim()).filter(Boolean);
     if (users.length === 0) {
         throw new Error('ALLOWED_USERS must list at least one email');
     }
-    return users;
+    return users.map((user) => {
+        const email = normalizeEmail(user);
+        if (!email) {
+            throw new Error('ALLOWED_USERS contains an invalid email');
+        }
+        return email;
+    });
+}
+
+const emailPattern = /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
+
+export function normalizeEmail(value: string): string | undefined {
+    const email = value.trim().toLowerCase();
+    if (email.length === 0 || email.length > 254 || /[\r\n\0]/.test(email) || !emailPattern.test(email)) {
+        return undefined;
+    }
+    return email;
 }
 
 function requireSecret(name: string, value: string): void {
@@ -226,6 +248,50 @@ function assertHttpsURL(name: string, value: string): void {
 
 function isPlaceholder(value: string): boolean {
     return value.includes('customdomain.com');
+}
+
+function parseCookieDomain(value: string, publicOrigin: string): string {
+    if (!value) {
+        return '';
+    }
+    const domain = value.replace(/^\./, '').toLowerCase();
+    const host = new URL(publicOrigin).hostname.toLowerCase();
+    const valid = /^[a-z0-9.-]+$/.test(domain) && domain.includes('.') && !domain.includes('..') && !domain.startsWith('.') && !domain.endsWith('.') && !domain.startsWith('-');
+    if (!valid || (host !== domain && !host.endsWith(`.${domain}`))) {
+        throw new Error('COOKIE_DOMAIN must be the public host or a parent domain');
+    }
+    return domain;
+}
+
+function readOrigins(envValue: string | undefined, fileValue: unknown): string[] {
+    let source: string[] = [];
+    if (typeof envValue === 'string' && envValue.trim() !== '') {
+        source = envValue.split(',');
+    } else if (Array.isArray(fileValue)) {
+        source = fileValue.filter((item): item is string => typeof item === 'string');
+    } else if (typeof fileValue === 'string' && fileValue.trim() !== '') {
+        source = fileValue.split(',');
+    }
+    return source.map((item) => {
+        const trimmed = item.trim();
+        let parsed: URL;
+        try {
+            parsed = new URL(trimmed);
+        } catch {
+            throw new Error('ALLOWED_REDIRECT_ORIGINS must be a comma-separated list of http(s) origins');
+        }
+        if ((parsed.protocol !== 'https:' && parsed.protocol !== 'http:') || parsed.username || parsed.password || (parsed.pathname !== '/' && parsed.pathname !== '') || parsed.search || parsed.hash) {
+            throw new Error('ALLOWED_REDIRECT_ORIGINS must be a comma-separated list of http(s) origins');
+        }
+        return parsed.origin;
+    });
+}
+
+function requireBounded(name: string, value: number, min: number, max: number): number {
+    if (!Number.isInteger(value) || value < min || value > max) {
+        throw new Error(`${name} must be an integer from ${min} to ${max}`);
+    }
+    return value;
 }
 
 function readTrustProxy(value: string | undefined): boolean | number | string {

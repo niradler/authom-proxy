@@ -3,6 +3,7 @@ services:
     container_name: authom-proxy
     build: .
     restart: unless-stopped
+    stop_grace_period: 15s
     ports:
       - "127.0.0.1:8001:3000"
     env_file:
