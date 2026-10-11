@@ -15,8 +15,8 @@ Authom Proxy is an open-source authentication proxy service that simplifies the 
 
 ### Prerequisites
 
-- Node.js (v14 or later)
-- npm or yarn
+- Node.js 22 or later
+- npm
 - Docker and docker-compose (optional, for containerized deployment)
 
 ### Installation
@@ -24,7 +24,7 @@ Authom Proxy is an open-source authentication proxy service that simplifies the 
 1. Clone the repository:
 
    ```sh
-   git clone https://github.com/yourusername/authom-proxy.git
+   git clone https://github.com/niradler/authom-proxy.git
    cd authom-proxy
    ```
 
@@ -34,26 +34,12 @@ Authom Proxy is an open-source authentication proxy service that simplifies the 
    npm install
    ```
 
-3. Create a `.env` file in the root directory and add your configuration:
+3. Create a `.env` file from `.env.example`. `PUBLIC_URL`, `JWT_SECRET`, `COOKIE_SECRET`, `ALLOWED_USERS`, and one OAuth provider are required. Secrets must be at least 32 characters. The process listens on `127.0.0.1` unless `BIND_HOST` is set. For several apps on one lab domain, set `COOKIE_DOMAIN` to that parent domain and list each app origin in `ALLOWED_REDIRECT_ORIGINS`.
 
-   ```sh
-   PORT=3000
-   JWT_SECRET=your_jwt_secret
-   ALLOWED_USERS=user1@example.com,user2@example.com
-   GOOGLE_CLIENT_ID=your_google_client_id
-   GOOGLE_CLIENT_SECRET=your_google_client_secret
-   # Add other provider credentials as needed
-   ```
-
-4. Build the project:
+4. Build and start:
 
    ```sh
    npm run build
-   ```
-
-5. Start the server:
-
-   ```sh
    npm start
    ```
 
@@ -61,19 +47,15 @@ Authom Proxy is an open-source authentication proxy service that simplifies the 
 
 To deploy using Docker and docker-compose:
 
-1. Ensure you have Docker and docker-compose installed.
-2. Create a `.env` file as described in the Installation section.
-3. Run:
-
-   ```sh
-   docker-compose up -d
-   ```
+1. Create a `.env` file as described in the Installation section.
+2. Run `docker compose up -d --build`. The published port is bound to `127.0.0.1:8001`. Inside the container the process listens on `0.0.0.0` so a private Docker network can reach it. Attach the container to the Traefik network when the proxy runs in another container.
+3. Point Traefik forward auth at `http://authom-proxy:3000/auth/session` and copy `X-Forwarded-User` into the upstream request. Set `TRUST_PROXY=1` when Traefik is the only proxy in front of this service. Leave the auth router itself outside the forward-auth middleware. A browser without a session is redirected to `/auth/login` and, after login, back to an origin listed in `ALLOWED_REDIRECT_ORIGINS`.
 
 ## Usage
 
-1. Configure your application to use Authom Proxy as an authentication middleware.
-2. Direct users to `http://your-domain.com/auth/providers` to see available login options.
-3. After successful authentication, users will be redirected to your application with an `X-Forwarded-User` header containing their email.
+1. Send users who need to sign in to `https://auth.lab.example/auth/login`.
+2. After a successful login the browser receives an `HttpOnly` session cookie. With `COOKIE_DOMAIN` set, that cookie is sent to the other lab apps.
+3. Forward-auth checks call `/auth/session`. Allowlisted users get `200` and `X-Forwarded-User`. Everyone else gets a login redirect, or `401` when the client asks for JSON. Return targets are limited to same-site paths and origins in `ALLOWED_REDIRECT_ORIGINS`.
 
 ## Supported Providers
 
@@ -113,10 +95,10 @@ GOOGLE_CLIENT_SECRET=your_google_client_secret
     "google": {
       "clientId": "your_google_client_id",
       "clientSecret": "your_google_client_secret",
-      "authUrl": "https://accounts.google.com/o/oauth2/v2/auth", //optional
-      "tokenUrl": "https://oauth2.googleapis.com/token", //optional
-      "profileUrl": "https://www.googleapis.com/oauth2/v1/userinfo", //optional
-      "scope": "https://www.googleapis.com/auth/userinfo.email" //optional
+      "authUrl": "https://accounts.google.com/o/oauth2/v2/auth",
+      "tokenUrl": "https://oauth2.googleapis.com/token",
+      "profileUrl": "https://www.googleapis.com/oauth2/v3/userinfo",
+      "scope": "openid email"
     }
   }
 }

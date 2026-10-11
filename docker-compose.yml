@@ -2,68 +2,23 @@ services:
   authom-proxy:
     container_name: authom-proxy
     build: .
+    restart: unless-stopped
+    stop_grace_period: 15s
     ports:
-      - "8001:3000"
+      - "127.0.0.1:8001:3000"
     env_file:
       - .env
-    networks:
-      - traefik-public
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.auth-proxy.rule=Host(`localhost`) && PathPrefix(`/auth`)"
+      - "traefik.http.routers.auth-proxy.rule=PathPrefix(`/auth`)"
       - "traefik.http.services.auth-proxy.loadbalancer.server.port=3000"
-      - "traefik.http.middlewares.auth-middleware.forwardauth.trustForwardHeader=true"
-      - "traefik.http.middlewares.auth-middleware.forwardauth.authResponseHeaders=X-Forwarded-User"
-      - "traefik.http.middlewares.auth-middleware.forwardauth.authResponseHeadersRegex=X-.*"
       - "traefik.http.middlewares.auth-middleware.forwardauth.address=http://authom-proxy:3000/auth/session"
-      - "traefik.http.routers.auth.middlewares=auth-middleware"
-
-  traefik:
-    image: traefik
-    command:
-      - "--api.insecure=true"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--entrypoints.web.address=:80"
-      - "--log.level=INFO"
-      - "--accesslog"
-      - "--accesslog.fields.headers.defaultmode=keep"
-      - "--accesslog.fields.headers.names.host=keep"
-    ports:
-      - "3000:80"
-      - "80:80"
-      - "8080:8080"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    networks:
-      - traefik-public
-    depends_on:
-      - authom-proxy
-    labels:
-      - traefik.http.middlewares.ratelimit.ratelimit.average=100
-      - traefik.http.middlewares.ratelimit.ratelimit.burst=300
-
-  whoami:
-    image: traefik/whoami
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.whoami.rule=Host(`localhost`) && PathPrefix(`/whoami`)"
-      - "traefik.http.routers.whoami.middlewares=auth-middleware"
-    depends_on:
-      - traefik
-    networks:
-      - traefik-public
-
-  web:
-    image: nginx:alpine
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.web.rule=Host(`localhost`) && PathPrefix(`/web`)"
-      - "traefik.http.routers.web.middlewares=auth-middleware"
-    depends_on:
-      - traefik
-    networks:
-      - traefik-public
-
-networks:
-  traefik-public:
+      - "traefik.http.middlewares.auth-middleware.forwardauth.authResponseHeaders=X-Forwarded-User"
+      - "traefik.http.middlewares.auth-middleware.forwardauth.trustForwardHeader=true"
